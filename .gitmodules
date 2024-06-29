@@ -1,12 +1,15 @@
 [submodule "lisdf"]
 	path = lisdf
-	url = https://github.com/Learning-and-Intelligent-Systems/lisdf
+	url = git@github.com:RAraghavarora/lisdf.git
+	branch = pddl-constant-support
 [submodule "pybullet_planning"]
 	path = pybullet_planning
-	url = git@github.com:zt-yang/pybullet_planning.git
+	url = git@github.com:RAraghavarora/pybullet_planning.git
+	branch = master
 [submodule "assets/models"]
 	path = assets/models
 	url = git@github.com:zt-yang/kitchen-models.git
 [submodule "pddlstream"]
 	path = pddlstream
-	url = git@github.com:zt-yang/pddlstream.git
+	url = git@github.com:RAraghavarora/pddlstream.git
+	branch = caelan/diverse

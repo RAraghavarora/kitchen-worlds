@@ -1,19 +1,19 @@
 #!/usr/bin/env python
 from __future__ import print_function
-
 from os.path import join
-import sys
+# import sys
 # sys.path.append("/home2/raghav.arora/llm_tamp/kitchen-worlds/pybullet_planning/pybullet_tools")
-sys.path.append("/home2/raghav.arora/llm_tamp/kitchen-worlds/pddlstream")
 # sys.path.append("/home2/raghav.arora/llm_tamp/")
-sys.path.append("/home2/raghav.arora/llm_tamp/kitchen-worlds/pybullet_planning/")
-sys.path.append("/home2/raghav.arora/llm_tamp/kitchen-worlds/lisdf/")
+# sys.path.append("/home2/raghav.arora/llm_tamp/kitchen-worlds/pybullet_planning/")
+# sys.path.append("/home2/raghav.arora/llm_tamp/kitchen-worlds/pddlstream")
+# sys.path.append("/home2/raghav.arora/llm_tamp/kitchen-worlds/")
 # import pybullet_tools
 try:
     import pybullet as p
 except ImportError:
     raise ImportError('This example requires PyBullet (https://pypi.org/project/pybullet/)')
 
+import config
 from pddlstream.algorithms.meta import solve, create_parser
 from pddlstream.algorithms.search import ABSTRIPSLayer
 from pddlstream.language.generator import from_gen_fn, from_list_fn, from_fn, from_test, accelerate_list_gen_fn
@@ -21,6 +21,9 @@ from pddlstream.utils import read, get_file_path, Profiler
 from pddlstream.language.constants import PDDLProblem, And, Equal, print_solution
 from pddlstream.language.stream import StreamInfo
 
+import sys
+# Remove pybullet_planning from sys path for imports (because examples exists inside pybullet_planning also)
+sys.path.remove(config.join(config.PROJECT_DIR, 'pybullet_planning'))
 from examples.pybullet.pr2_belief.primitives import Scan, ScanRoom, Detect, Register, \
     plan_head_traj, get_cone_commands, move_look_trajectory, get_vis_base_gen, \
     get_inverse_visibility_fn, get_in_range_test, VIS_RANGE, REG_RANGE
@@ -33,6 +36,8 @@ from examples.pybullet.utils.pybullet_tools.utils import set_pose, get_pose, con
 from examples.pybullet.utils.pybullet_tools.pr2_primitives import Conf, get_ik_ir_gen, get_motion_gen, get_stable_gen, \
     get_grasp_gen, Attach, Detach, apply_commands, Trajectory, get_base_limits
 from examples.discrete_belief.run import revisit_mdp_cost, MAX_COST, clip_cost
+# Add pybullet_planning after importing
+sys.path.append(config.join(config.PROJECT_DIR, 'pybullet_planning'))
 
 
 def pddlstream_from_state(state, teleport=False):
@@ -40,7 +45,7 @@ def pddlstream_from_state(state, teleport=False):
     robot = task.robot
     # TODO: infer open world from task
 
-    exp_dir = '/home2/raghav.arora/llm_tamp/kitchen-worlds/pybullet_planning/pddl/'
+    exp_dir = '/home2/raghav.arora/llm_tamp/kitchen-worlds/pybullet_planning/pddl_domains/'
     domain_path = join(exp_dir, 'pr2_belief_domain.pddl')
     stream_path = join(exp_dir, 'pr2_belief_stream.pddl')
     domain_pddl = read(domain_path)
@@ -254,7 +259,6 @@ def plan_commands(state, args, profile=True, verbose=True):
     ]
 
     with Profiler(field='cumtime', num=10 if profile else None):
-        # sys.path.append("/home2/raghav.arora/llm_tamp/kitchen-worlds/")
         solution = solve(pddlstream_problem, algorithm=args.algorithm, unit_costs=args.unit,
                          stream_info=stream_info, hierarchy=hierarchy, debug=False,
                          success_cost=MAX_COST, verbose=verbose)
@@ -283,7 +287,6 @@ def main(time_step=0.01):
     real_world = connect(use_gui=not args.viewer)
     add_data_path()
     task, state = get_problem1(localized='rooms', p_other=0.25) # surfaces | rooms
-    import pdb; pdb.set_trace()
     for body in task.get_bodies():
         add_body_name(body)
 

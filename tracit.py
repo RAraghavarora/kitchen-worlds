@@ -2,7 +2,7 @@ import sys
 
 
 WHITE_LIST = {'kitchen'}      # Look for these words in the file path.
-EXCLUSIONS = {}          # Ignore <listcomp>, etc. in the function name.
+EXCLUSIONS = {'<'}          # Ignore <listcomp>, etc. in the function name.
 
 
 def tracefunc(frame, event, arg):
@@ -28,7 +28,7 @@ def tracefunc(frame, event, arg):
                     indent=tracefunc.stack_level*2, name=func_name)
             txt = '{: <40} # {}, {}'.format(
                     func_name, frame.f_code.co_filename, frame.f_lineno)
-            with open("trace.txt", 'a') as f:
+            with open("rag_log.txt", 'a') as f:
                 f.write(txt)
                 f.write('\n')
             # print(txt)

@@ -8,6 +8,12 @@ from os.path import join
 # sys.path.append("/home2/raghav.arora/llm_tamp/kitchen-worlds/pddlstream")
 # sys.path.append("/home2/raghav.arora/llm_tamp/kitchen-worlds/")
 # import pybullet_tools
+import sys
+
+# Uncomment this when running for the first time to get a trace of function calls
+# import tracit
+# sys.setprofile(tracit.tracefunc)
+
 try:
     import pybullet as p
 except ImportError:
@@ -21,7 +27,10 @@ from pddlstream.utils import read, get_file_path, Profiler
 from pddlstream.language.constants import PDDLProblem, And, Equal, print_solution
 from pddlstream.language.stream import StreamInfo
 
-import sys
+# from pybullet_planning.pybullet_tools.utils import set_pose, get_pose, connect, clone_world, \
+#     disconnect, set_client, add_data_path, WorldSaver, wait_for_user, get_joint_positions, get_configuration, \
+#     set_configuration, ClientSaver, HideOutput, is_center_stable, add_body_name, draw_base_limits, VideoSaver
+
 # Remove pybullet_planning from sys path for imports (because examples exists inside pybullet_planning also)
 sys.path.remove(config.join(config.PROJECT_DIR, 'pybullet_planning'))
 from examples.pybullet.pr2_belief.primitives import Scan, ScanRoom, Detect, Register, \

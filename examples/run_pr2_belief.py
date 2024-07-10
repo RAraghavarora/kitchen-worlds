@@ -103,7 +103,6 @@ def pddlstream_from_state(state, teleport=False):
         init += [('Pose', body, pose), ('AtPose', body, pose),
                  ('Observable', pose),
         ]
-
     init += [('Scannable', body) for body in task.rooms + task.surfaces]
     init += [('Registerable', body) for body in task.movable]
     init += [('Graspable', body) for body in task.movable]
@@ -135,6 +134,16 @@ def pddlstream_from_state(state, teleport=False):
            [('On', b, s) for b, s in task.goal_on] + \
            [('Localized', b) for b in task.goal_localized] + \
            [('Registered', b) for b in task.goal_registered])
+
+    # Code to use fridge added by Raghav
+    fridge = task.get_bodies()[-1] # TODO: Confirm this
+    init += [('door', str(fridge)+'::joint_0')]
+    init += [('space', str(fridge)+'::link_1')]
+    init += [('joint', str(fridge)+'::joint_0')]
+
+    goal2 = And(goal, ('graspedhandle', str(fridge)+'::joint_1'))
+
+
 
     stream_map = {
         'sample-pose': from_gen_fn(get_stable_gen(task)),

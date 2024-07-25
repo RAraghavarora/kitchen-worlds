@@ -8,7 +8,7 @@ sys.setprofile(tracit.tracefunc)
 
 if __name__ == '__main__':
     seed = 378277
-    goal_variations = [3]
+    goal_variations = [1]
     run_agent(
         agent_class=PDDLStreamAgent, config='config_pigi.yaml',
         goal_variations=goal_variations, seed=seed, exp_subdir='piginet_data', problem='test_full_kitchen'

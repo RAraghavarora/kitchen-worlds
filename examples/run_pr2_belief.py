@@ -45,6 +45,9 @@ from examples.pybullet.utils.pybullet_tools.utils import set_pose, get_pose, con
 from examples.pybullet.utils.pybullet_tools.pr2_primitives import Conf, get_ik_ir_gen, get_motion_gen, get_stable_gen, \
     get_grasp_gen, Attach, Detach, apply_commands, Trajectory, get_base_limits
 from examples.discrete_belief.run import revisit_mdp_cost, MAX_COST, clip_cost
+from examples.pybullet.utils.pybullet_tools.general_streams import get_grasp_list_gen, get_contain_list_gen, sample_joint_position_closed_gen, get_handle_grasp_gen
+from examples.pybullet.utils.pybullet_tools.mobile_streams import get_ik_fn_old, get_ik_gen_old, get_ik_ungrasp_gen, get_pull_door_handle_motion_gen
+from examples.pybullet.utils.pybullet_tools.pr2_streams import sample_joint_position_gen
 # Add pybullet_planning after importing
 sys.path.append(config.join(config.PROJECT_DIR, 'pybullet_planning'))
 
@@ -130,21 +133,38 @@ def pddlstream_from_state(state, teleport=False):
         if body in state.registered:
             init.append(('Registered', body))
 
+    fridge = 5
+    food = 3
+    joint = (fridge, 1)
+    fridge_region = (fridge, None, 0) #TODO: idk why
+    floor = 1
+    task.floors = [floor]
+    # Code to use fridge added by Raghav
+    init += [('door', joint)]
+    init += [('space', fridge_region)]
+    init += [('region', fridge_region)]
+    init += [('joint', joint)]
+    init += [('position', joint, state.poses[fridge])]
+    init += [('atposition', joint, state.poses[fridge])]
+    init += [('isclosedposition', joint, state.poses[fridge])]
+    
+    for arm in ARM_NAMES:
+        joints = get_arm_joints(robot, arm)
+        conf = Conf(robot, joints, get_joint_positions(robot, joints))
+        init += [('DefaultAConf', arm, conf)]
+        init += [('canpull', arm)]
+    # goal2 = And(goal, ('graspedhandle', str(fridge)+'::joint_1'))
+    init += [('canmove')]
+    init += [('canpick')]
+
     goal = And(*[('Holding', a, b) for a, b in task.goal_holding] + \
-           [('On', b, s) for b, s in task.goal_on] + \
+        #    [('On', b, s) for b, s in task.goal_on] + \
+           [('In', food, fridge_region)] + \
            [('Localized', b) for b in task.goal_localized] + \
            [('Registered', b) for b in task.goal_registered])
 
-    # Code to use fridge added by Raghav
-    fridge = task.get_bodies()[-1] # TODO: Confirm this
-    init += [('door', str(fridge)+'::joint_0')]
-    init += [('space', str(fridge)+'::link_1')]
-    init += [('joint', str(fridge)+'::joint_0')]
 
-    goal2 = And(goal, ('graspedhandle', str(fridge)+'::joint_1'))
-
-
-
+    PULL_UNTIL = 1.8 #R For some reason
     stream_map = {
         'sample-pose': from_gen_fn(get_stable_gen(task)),
         'sample-grasp': from_list_fn(get_grasp_gen(task)),
@@ -157,6 +177,13 @@ def pddlstream_from_state(state, teleport=False):
         'sample-vis-base': accelerate_list_gen_fn(from_gen_fn(get_vis_base_gen(task, VIS_RANGE)), max_attempts=25),
         'sample-reg-base': accelerate_list_gen_fn(from_gen_fn(get_vis_base_gen(task, REG_RANGE)), max_attempts=25),
         'inverse-visibility': from_fn(get_inverse_visibility_fn(task)),
+        'sample-pose-inside': from_gen_fn(get_contain_list_gen(task)),
+        'inverse-reachability': from_gen_fn(get_ik_gen_old(task, verbose=True, visualize=False)),
+        'get-joint-position-open': from_gen_fn(sample_joint_position_gen(task, num_samples=6, p_max=PULL_UNTIL)),
+        'sample-handle-grasp': from_gen_fn(get_handle_grasp_gen(task)),
+        'inverse-kinematics-grasp-handle': from_gen_fn(get_ik_gen_old(task)),
+        'inverse-kinematics-ungrasp-handle': from_gen_fn(get_ik_ungrasp_gen(task, verbose=False)),
+        'plan-base-pull-handle': from_fn(get_pull_door_handle_motion_gen(task))
     }
 
     return PDDLProblem(domain_pddl, constant_map, stream_pddl, stream_map, init, goal)
@@ -242,6 +269,50 @@ def post_process(state, plan, replan_obs=True, replan_base=False, look_move=Fals
 
 #######################################################
 
+import numpy as np
+from robot_builder.robots import PR2Robot
+from pybullet_planning.robot_builder.robot_builders import set_pr2_ready
+from pybullet_tools.pr2_utils import set_group_conf
+from pybullet_tools.bullet_utils import BASE_LINK, BASE_RESOLUTIONS, draw_base_limits as draw_base_limits_bb, CAMERA_FRAME, CAMERA_MATRIX, EYE_FRAME, BASE_LIMITS
+import numpy as np
+from pybullet_tools.pr2_primitives import get_base_custom_limits
+from world_builder.entities import Camera
+def create_pr2_robot(robot_conf, robot_pose, robot=None, base_q=(0, 0, 0), dual_arm=False, resolutions=BASE_RESOLUTIONS, use_torso=True, custom_limits=BASE_LIMITS):
+    # copied from pybullet_planning
+    # robot = None
+    # if robot is None:
+    #     robot = create_pr2(use_drake=USE_DRAKE_PR2)
+    #     set_pr2_ready(robot, arm=PR2Robot.arms[0], dual_arm=dual_arm)
+    #     if len(base_q) == 3:
+    #         set_group_conf(robot, 'base', base_q)
+    #     elif len(base_q) == 4:
+    #         set_group_conf(robot, 'base-torso', base_q)
+    #     set_pose(robot, robot_pose)
+    #     set_configuration(robot, robot_conf)
+    with np.errstate(divide='ignore'):
+        weights = np.reciprocal(resolutions)
+
+    if isinstance(custom_limits, dict):
+        custom_limits = np.asarray(list(custom_limits.values())).T.tolist()
+
+    # if draw_base_limits:
+    #     draw_base_limits_bb(custom_limits)
+
+    robot = PR2Robot(robot, base_link=BASE_LINK,
+                     dual_arm=dual_arm, use_torso=use_torso,
+                     custom_limits=get_base_custom_limits(robot, custom_limits),
+                     resolutions=resolutions, weights=weights)
+
+    # print('initial base conf', get_group_conf(robot, 'base'))
+    # set_camera_target_robot(robot, FRONT=True)
+
+    camera = Camera(robot, camera_frame=CAMERA_FRAME, camera_matrix=CAMERA_MATRIX, max_depth=2.5, draw_frame=EYE_FRAME)
+    robot.cameras.append(camera)
+
+    ## don't show depth and segmentation data yet
+    # if args.camera: robot.cameras[-1].get_image(segment=args.segment)
+
+    return robot
 
 def plan_commands(state, args, profile=True, verbose=True):
     # TODO: could make indices into set of bodies to ensure the same...
@@ -256,6 +327,8 @@ def plan_commands(state, args, profile=True, verbose=True):
             robot = create_pr2(use_drake=USE_DRAKE_PR2)
         set_pose(robot, robot_pose)
         set_configuration(robot, robot_conf)
+    robot_instance = create_pr2_robot(robot_conf, robot_pose, robot=robot)
+    task.robot_instance = robot_instance
     mapping = clone_world(client=sim_world, exclude=[task.robot]) # TODO: TypeError: argument 5 must be str, not bytes
     assert all(i1 == i2 for i1, i2 in mapping.items())
     set_client(sim_world)
@@ -342,7 +415,7 @@ def main(time_step=0.01):
             apply_commands(state, commands, time_step=time_step)
 
     print(state)
-    wait_for_user()
+    # wait_for_user()
     disconnect()
 
 

@@ -158,8 +158,8 @@ def pddlstream_from_state(state, teleport=False):
     init += [('canpick')]
 
     goal = And(*[('Holding', a, b) for a, b in task.goal_holding] + \
-        #    [('On', b, s) for b, s in task.goal_on] + \
-           [('In', food, fridge_region)] + \
+           [('On', b, s) for b, s in task.goal_on] + \
+        #    [('In', food, fridge_region)] + \
            [('Localized', b) for b in task.goal_localized] + \
            [('Registered', b) for b in task.goal_registered])
 
@@ -379,7 +379,10 @@ def main(time_step=0.01):
     add_data_path()
     task, state = get_problem1(localized='rooms', p_other=0.25) # surfaces | rooms
     for body in task.get_bodies():
-        add_body_name(body)
+        try:
+            add_body_name(body)
+        except TypeError:
+            import pdb; pdb.set_trace()
 
     robot = task.robot
     #dump_body(robot)

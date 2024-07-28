@@ -34,7 +34,7 @@ from pddlstream.language.stream import StreamInfo
 # Remove pybullet_planning from sys path for imports (because examples exists inside pybullet_planning also)
 # sys.path.remove(config.join(config.PROJECT_DIR, 'pybullet_planning'))
 from examples.pybullet.pr2_belief.primitives import Scan, ScanRoom, Detect, Register, MoveArm, \
-    GripperCommand, plan_head_traj, get_cone_commands, move_look_trajectory, get_vis_base_gen, \
+    GripperCommand, AttachObjectCommand, plan_head_traj, get_cone_commands, move_look_trajectory, get_vis_base_gen, \
     get_inverse_visibility_fn, get_in_range_test, VIS_RANGE, REG_RANGE
 from examples.pybullet.pr2_belief.problems import get_problem1, USE_DRAKE_PR2, create_pr2
 from examples.pybullet.utils.pybullet_tools.pr2_utils import ARM_NAMES, get_arm_joints, attach_viewcone, \
@@ -281,8 +281,7 @@ def post_process(state, plan, replan_obs=True, replan_base=False, look_move=Fals
                 elif isinstance(_, GripperAction):
                     new_commands.append(GripperCommand(_.arm, state.task, position=_.position))
                 elif isinstance(_, AttachObjectAction):
-                    #TODO
-                    pass
+                    new_commands.append(AttachObjectCommand(_.arm, _.grasp, _.body, state))
                 else:
                     import pdb; pdb.set_trace()
                     print(9)
@@ -293,7 +292,6 @@ def post_process(state, plan, replan_obs=True, replan_base=False, look_move=Fals
             if isinstance(command, Trajectory) and command.path:
                 command.path[-1].assign()
         commands += new_commands
-    import pdb; pdb.set_trace()
     return commands
 
 

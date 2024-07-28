@@ -33,8 +33,8 @@ from pddlstream.language.stream import StreamInfo
 
 # Remove pybullet_planning from sys path for imports (because examples exists inside pybullet_planning also)
 # sys.path.remove(config.join(config.PROJECT_DIR, 'pybullet_planning'))
-from examples.pybullet.pr2_belief.primitives import Scan, ScanRoom, Detect, Register, \
-    plan_head_traj, get_cone_commands, move_look_trajectory, get_vis_base_gen, \
+from examples.pybullet.pr2_belief.primitives import Scan, ScanRoom, Detect, Register, MoveArm, \
+    GripperCommand, plan_head_traj, get_cone_commands, move_look_trajectory, get_vis_base_gen, \
     get_inverse_visibility_fn, get_in_range_test, VIS_RANGE, REG_RANGE
 from examples.pybullet.pr2_belief.problems import get_problem1, USE_DRAKE_PR2, create_pr2
 from examples.pybullet.utils.pybullet_tools.pr2_utils import ARM_NAMES, get_arm_joints, attach_viewcone, \
@@ -172,8 +172,8 @@ def pddlstream_from_state(state, teleport=False):
     goal = And(*[('Holding', a, b) for a, b in task.goal_holding] + \
         #    [('On', b, s) for b, s in task.goal_on] + \
         #    [('In', food, fridge_region)] + \
-            [('On', food, fridge)] + \
-                # [('CanUngrasp',)] + \
+            # [('On', food, fridge)] + \
+                [('CanUngrasp',)] + \
            [('Localized', b) for b in task.goal_localized] + \
            [('Registered', b) for b in task.goal_registered])
 
@@ -270,11 +270,22 @@ def post_process(state, plan, replan_obs=True, replan_base=False, look_move=Fals
             register = Register(robot, o)
             new_commands = [ht0, register]
             expecting_obs = True
-        elif name == 'grasp_handle':
-            # add command
-            pass
-        elif name == 'pull_handle':
-            pass
+        elif name == 'grasp_handle' or name == 'pull_handle':
+            from world_builder.actions import get_primitive_actions
+            action = plan[i]
+            cmds = get_primitive_actions(action, state.task.world, teleport=False)
+            for _ in cmds:
+                from world_builder.actions import MoveArmAction, GripperAction, AttachObjectAction
+                if isinstance(_, MoveArmAction):
+                    new_commands.append(MoveArm(_.conf))
+                elif isinstance(_, GripperAction):
+                    new_commands.append(GripperCommand(_.arm, state.task, position=_.position))
+                elif isinstance(_, AttachObjectAction):
+                    #TODO
+                    pass
+                else:
+                    import pdb; pdb.set_trace()
+                    print(9)
         else:
             raise ValueError(name)
         saved_world.restore()
@@ -282,6 +293,7 @@ def post_process(state, plan, replan_obs=True, replan_base=False, look_move=Fals
             if isinstance(command, Trajectory) and command.path:
                 command.path[-1].assign()
         commands += new_commands
+    import pdb; pdb.set_trace()
     return commands
 
 

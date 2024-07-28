@@ -32,7 +32,7 @@ from pddlstream.language.stream import StreamInfo
 #     set_configuration, ClientSaver, HideOutput, is_center_stable, add_body_name, draw_base_limits, VideoSaver
 
 # Remove pybullet_planning from sys path for imports (because examples exists inside pybullet_planning also)
-sys.path.remove(config.join(config.PROJECT_DIR, 'pybullet_planning'))
+# sys.path.remove(config.join(config.PROJECT_DIR, 'pybullet_planning'))
 from examples.pybullet.pr2_belief.primitives import Scan, ScanRoom, Detect, Register, \
     plan_head_traj, get_cone_commands, move_look_trajectory, get_vis_base_gen, \
     get_inverse_visibility_fn, get_in_range_test, VIS_RANGE, REG_RANGE
@@ -45,19 +45,18 @@ from examples.pybullet.utils.pybullet_tools.utils import set_pose, get_pose, con
 from examples.pybullet.utils.pybullet_tools.pr2_primitives import Conf, get_ik_ir_gen, get_motion_gen, get_stable_gen, \
     get_grasp_gen, Attach, Detach, apply_commands, Trajectory, get_base_limits
 from examples.discrete_belief.run import revisit_mdp_cost, MAX_COST, clip_cost
-from examples.pybullet.utils.pybullet_tools.general_streams import get_grasp_list_gen, get_contain_list_gen, sample_joint_position_closed_gen, get_handle_grasp_gen
+from examples.pybullet.utils.pybullet_tools.general_streams import get_grasp_list_gen, get_contain_list_gen, sample_joint_position_closed_gen, get_handle_grasp_gen, sample_joint_position_gen
 from examples.pybullet.utils.pybullet_tools.mobile_streams import get_ik_fn_old, get_ik_gen_old, get_ik_ungrasp_gen, get_pull_door_handle_motion_gen
-from examples.pybullet.utils.pybullet_tools.pr2_streams import sample_joint_position_gen
+from examples.pybullet.utils.pybullet_tools.rag_utils import get_body_joint_position
 # Add pybullet_planning after importing
-sys.path.append(config.join(config.PROJECT_DIR, 'pybullet_planning'))
-
+# sys.path.append(config.join(config.PROJECT_DIR, 'pybullet_planning'))
 
 def pddlstream_from_state(state, teleport=False):
     task = state.task
     robot = task.robot
     # TODO: infer open world from task
 
-    exp_dir = '/home2/raghav.arora/llm_tamp/kitchen-worlds/pybullet_planning/pddl_domains/'
+    exp_dir = '/home2/raghav.arora/KW/pybullet_planning/pddl_domains/'
     domain_path = join(exp_dir, 'pr2_belief_domain.pddl')
     stream_path = join(exp_dir, 'pr2_belief_stream.pddl')
     domain_pddl = read(domain_path)
@@ -95,9 +94,13 @@ def pddlstream_from_state(state, teleport=False):
        conf = Conf(robot, joints, get_joint_positions(robot, joints))
        init += [('Arm', arm), ('AConf', arm, conf), ('AtAConf', arm, conf)]
        if arm in task.arms:
-           init += [('Controllable', arm)]
+            init += [('Controllable', arm)]
+            init += [('canpull', arm)]
        if arm not in holding_arms:
            init += [('HandEmpty', arm)]
+    
+    # init += task.robot_instance.get_init()
+
     for body in task.get_bodies():
         if body in holding_bodies:
             continue
@@ -139,30 +142,40 @@ def pddlstream_from_state(state, teleport=False):
     fridge_region = (fridge, None, 0) #TODO: idk why
     floor = 1
     task.floors = [floor]
+    joint_pos = get_body_joint_position(joint)
     # Code to use fridge added by Raghav
     init += [('door', joint)]
     init += [('space', fridge_region)]
     init += [('region', fridge_region)]
     init += [('joint', joint)]
-    init += [('position', joint, state.poses[fridge])]
-    init += [('atposition', joint, state.poses[fridge])]
-    init += [('isclosedposition', joint, state.poses[fridge])]
+    init += [('door', joint)]
+    init += [('staticlink', joint)]
+    init += [('isjointto', joint, fridge)]
+    init += [('position', joint, joint_pos)]
+    init += [('atposition', joint, joint_pos)]
+    init += [('isclosedposition', joint, joint_pos)]
     
     for arm in ARM_NAMES:
         joints = get_arm_joints(robot, arm)
         conf = Conf(robot, joints, get_joint_positions(robot, joints))
         init += [('DefaultAConf', arm, conf)]
-        init += [('canpull', arm)]
     # goal2 = And(goal, ('graspedhandle', str(fridge)+'::joint_1'))
-    init += [('canmove')]
-    init += [('canpick')]
+    init += [('canmove',)]
+    init += [('canpick',)]
+    init += [('cangrasphandle',)]
+    init += [('containable', food, fridge_region)]
+    init += [('canmovebase',)]
+
+
+    # init2 = task.world.get_facts()
 
     goal = And(*[('Holding', a, b) for a, b in task.goal_holding] + \
-           [('On', b, s) for b, s in task.goal_on] + \
+        #    [('On', b, s) for b, s in task.goal_on] + \
         #    [('In', food, fridge_region)] + \
+            [('On', food, fridge)] + \
+                # [('CanUngrasp',)] + \
            [('Localized', b) for b in task.goal_localized] + \
            [('Registered', b) for b in task.goal_registered])
-
 
     PULL_UNTIL = 1.8 #R For some reason
     stream_map = {
@@ -178,10 +191,10 @@ def pddlstream_from_state(state, teleport=False):
         'sample-reg-base': accelerate_list_gen_fn(from_gen_fn(get_vis_base_gen(task, REG_RANGE)), max_attempts=25),
         'inverse-visibility': from_fn(get_inverse_visibility_fn(task)),
         'sample-pose-inside': from_gen_fn(get_contain_list_gen(task)),
-        'inverse-reachability': from_gen_fn(get_ik_gen_old(task, verbose=True, visualize=False)),
+        'inverse-reachability': from_gen_fn(get_ik_gen_old(task, verbose=True, visualize=False, ir_only=True)),
         'get-joint-position-open': from_gen_fn(sample_joint_position_gen(task, num_samples=6, p_max=PULL_UNTIL)),
         'sample-handle-grasp': from_gen_fn(get_handle_grasp_gen(task)),
-        'inverse-kinematics-grasp-handle': from_gen_fn(get_ik_gen_old(task)),
+        'inverse-kinematics-grasp-handle': from_gen_fn(get_ik_gen_old(task, ACONF=True)),
         'inverse-kinematics-ungrasp-handle': from_gen_fn(get_ik_ungrasp_gen(task, verbose=False)),
         'plan-base-pull-handle': from_fn(get_pull_door_handle_motion_gen(task))
     }
@@ -257,6 +270,11 @@ def post_process(state, plan, replan_obs=True, replan_base=False, look_move=Fals
             register = Register(robot, o)
             new_commands = [ht0, register]
             expecting_obs = True
+        elif name == 'grasp_handle':
+            # add command
+            pass
+        elif name == 'pull_handle':
+            pass
         else:
             raise ValueError(name)
         saved_world.restore()
@@ -327,8 +345,9 @@ def plan_commands(state, args, profile=True, verbose=True):
             robot = create_pr2(use_drake=USE_DRAKE_PR2)
         set_pose(robot, robot_pose)
         set_configuration(robot, robot_conf)
-    robot_instance = create_pr2_robot(robot_conf, robot_pose, robot=robot)
-    task.robot_instance = robot_instance
+    # robot_instance = create_pr2_robot(robot_conf, robot_pose, robot=robot)
+    # world.add_robot(robot_instance)
+    # task.robot_instance = robot_instance
     mapping = clone_world(client=sim_world, exclude=[task.robot]) # TODO: TypeError: argument 5 must be str, not bytes
     assert all(i1 == i2 for i1, i2 in mapping.items())
     set_client(sim_world)
@@ -350,6 +369,7 @@ def plan_commands(state, args, profile=True, verbose=True):
     ]
 
     with Profiler(field='cumtime', num=10 if profile else None):
+        # import pdb; pdb.set_trace()
         solution = solve(pddlstream_problem, algorithm=args.algorithm, unit_costs=args.unit,
                          stream_info=stream_info, hierarchy=hierarchy, debug=False,
                          success_cost=MAX_COST, verbose=verbose)
@@ -382,7 +402,8 @@ def main(time_step=0.01):
         try:
             add_body_name(body)
         except TypeError:
-            import pdb; pdb.set_trace()
+            add_body_name(body.body)
+            # import pdb; pdb.set_trace()
 
     robot = task.robot
     #dump_body(robot)

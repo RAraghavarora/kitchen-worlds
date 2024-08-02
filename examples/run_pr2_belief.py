@@ -45,7 +45,7 @@ from examples.pybullet.utils.pybullet_tools.utils import set_pose, get_pose, con
 from examples.pybullet.utils.pybullet_tools.pr2_primitives import Conf, get_ik_ir_gen, get_motion_gen, get_stable_gen, \
     get_grasp_gen, Attach, Detach, apply_commands, Trajectory, get_base_limits
 from examples.discrete_belief.run import revisit_mdp_cost, MAX_COST, clip_cost
-from examples.pybullet.utils.pybullet_tools.general_streams import get_grasp_list_gen, get_contain_list_gen, sample_joint_position_closed_gen, get_handle_grasp_gen, sample_joint_position_gen
+from examples.pybullet.utils.pybullet_tools.general_streams import get_grasp_list_gen, get_contain_list_gen, sample_joint_position_closed_gen, get_handle_grasp_gen, sample_joint_position_gen, get_cfree_approach_pose_test, get_cfree_pose_pose_test
 from examples.pybullet.utils.pybullet_tools.mobile_streams import get_ik_fn_old, get_ik_gen_old, get_ik_ungrasp_gen, get_pull_door_handle_motion_gen
 from examples.pybullet.utils.pybullet_tools.rag_utils import get_body_joint_position
 # Add pybullet_planning after importing
@@ -172,8 +172,9 @@ def pddlstream_from_state(state, teleport=False):
     goal = And(*[('Holding', a, b) for a, b in task.goal_holding] + \
         #    [('On', b, s) for b, s in task.goal_on] + \
         #    [('In', food, fridge_region)] + \
+           [('GraspedHandle', joint)] + \
             # [('On', food, fridge)] + \
-                [('CanUngrasp',)] + \
+                # [('CanUngrasp',)] + \
            [('Localized', b) for b in task.goal_localized] + \
            [('Registered', b) for b in task.goal_registered])
 
@@ -196,7 +197,10 @@ def pddlstream_from_state(state, teleport=False):
         'sample-handle-grasp': from_gen_fn(get_handle_grasp_gen(task)),
         'inverse-kinematics-grasp-handle': from_gen_fn(get_ik_gen_old(task, ACONF=True)),
         'inverse-kinematics-ungrasp-handle': from_gen_fn(get_ik_ungrasp_gen(task, verbose=False)),
-        'plan-base-pull-handle': from_fn(get_pull_door_handle_motion_gen(task))
+        'plan-base-pull-handle': from_fn(get_pull_door_handle_motion_gen(task)),
+        'test-cfree-approach-pose': from_test(get_cfree_approach_pose_test(task, collisions=True)),
+        'test-cfree-pose-pose': from_test(get_cfree_pose_pose_test(task.world.robot, collisions=True, visualize=False)),
+
     }
 
     return PDDLProblem(domain_pddl, constant_map, stream_pddl, stream_map, init, goal)
